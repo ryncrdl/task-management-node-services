@@ -35,9 +35,12 @@ module.exports = {
     host: process.env.MAIL_HOST || 'localhost',
     port: parseInt(process.env.MAIL_PORT, 10) || 1025,
     user: process.env.MAIL_USER || '',
-    pass: process.env.MAIL_PASS || '',
-    from: process.env.MAIL_FROM || 'noreply@taskmanagement.com',
+    pass: (process.env.MAIL_PASS || '').replace(/\s+/g, ''),
+    from:     process.env.MAIL_FROM     || process.env.MAIL_USER || 'noreply@taskmanagement.com',
     fromName: process.env.MAIL_FROM_NAME || 'Task Management',
+    // Resend fallback (used when SMTP connection times out)
+    resendApiKey: process.env.RESEND_API_KEY || null,
+    resendFrom:   process.env.RESEND_FROM    || 'onboarding@resend.dev',
   },
 
   redisUrl: process.env.REDIS_URL || null,

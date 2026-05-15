@@ -1,7 +1,9 @@
 'use strict';
 
 const nodemailer = require('nodemailer');
+const { Resend }  = require('resend');
 const config = require('../config');
+const logger = require('../utils/logger');
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -333,10 +335,69 @@ function getTransporter() {
     _transporter = nodemailer.createTransport({
       host: config.mail.host,
       port: config.mail.port,
+      secure: config.mail.port === 465,
       auth: config.mail.user ? { user: config.mail.user, pass: config.mail.pass } : undefined,
+      connectionTimeout: 15000,
+      socketTimeout:     15000,
     });
   }
   return _transporter;
 }
 
-module.exports = { emailTemplates, getTransporter };
+// Connection-related error codes/messages that warrant a Resend fallback
+const CONNECTION_ERRORS = ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET', 'connection timeout', 'Connection timeout'];
+
+function isConnectionError(err) {
+  const msg = err.message || '';
+  return CONNECTION_ERRORS.some((e) => msg.includes(e)) || CONNECTION_ERRORS.includes(err.code);
+}
+
+/**
+ * Send via Resend HTTP API (fallback when SMTP times out).
+ * Requires RESEND_API_KEY env var.
+ */
+async function sendViaResend(to, subject, html) {
+  if (!config.mail.resendApiKey) {
+    throw new Error('RESEND_API_KEY not configured — cannot fall back to Resend');
+  }
+  const resend = new Resend(config.mail.resendApiKey);
+  const { data, error } = await resend.emails.send({
+    from: `${config.mail.fromName} <${config.mail.resendFrom}>`,
+    to,
+    subject,
+    html,
+  });
+  if (error) throw new Error(error.message || JSON.stringify(error));
+  return data;
+}
+
+/**
+ * Primary send function.
+ * Tries Gmail SMTP first; if a connection/timeout error occurs, falls back to Resend.
+ */
+async function sendEmail(to, subject, html) {
+  try {
+    const transporter = getTransporter();
+    const info = await transporter.sendMail({
+      from: `"${config.mail.fromName}" <${config.mail.from}>`,
+      to,
+      subject,
+      html,
+    });
+    logger.info('Email sent via SMTP', { to });
+    // Reset transporter on success so next call reuses it
+    return info;
+  } catch (err) {
+    if (isConnectionError(err)) {
+      logger.warn('SMTP connection failed, falling back to Resend', { error: err.message, to });
+      // Reset transporter so next attempt creates a fresh connection
+      _transporter = null;
+      const result = await sendViaResend(to, subject, html);
+      logger.info('Email sent via Resend fallback', { to });
+      return result;
+    }
+    throw err;
+  }
+}
+
+module.exports = { emailTemplates, getTransporter, sendEmail };

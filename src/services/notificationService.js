@@ -1,6 +1,6 @@
 'use strict';
 
-const { emailTemplates, getTransporter } = require('../utils/emailTemplates');
+const { emailTemplates } = require('../utils/emailTemplates');
 const laravelApi = require('./laravelApiClient');
 const config     = require('../config');
 const logger     = require('../utils/logger');
@@ -112,18 +112,11 @@ async function processNotification(job) {
 }
 
 /**
- * Send an email via Nodemailer. Throws on failure so caller can handle retry.
+ * Send an email. Tries SMTP first, falls back to Resend on connection errors.
  */
 async function sendEmail(to, subject, html) {
-  const transporter = getTransporter();
-  const info = await transporter.sendMail({
-    from: `"${config.mail.fromName}" <${config.mail.from}>`,
-    to,
-    subject,
-    html,
-  });
-  logger.info('Email sent', { messageId: info.messageId, to });
-  return info;
+  const { sendEmail: _send } = require('../utils/emailTemplates');
+  return _send(to, subject, html);
 }
 
 /**
