@@ -14,18 +14,9 @@ const logger = require('../utils/logger');
 async function run() {
   logger.info('[DailyDigest] Starting job...');
 
-  // Obtain an admin token for internal API calls
-  // In production this would use a long-lived service account token or OAuth client credentials.
-  // For this implementation we use the INTERNAL_SERVICE_SECRET header.
-  const adminToken = getAdminToken();
-  if (!adminToken) {
-    logger.warn('[DailyDigest] No admin token available — skipping');
-    return;
-  }
-
   let tasksByUser;
   try {
-    tasksByUser = await laravelApi.getIncompleteTasksByUser(adminToken);
+    tasksByUser = await laravelApi.getIncompleteTasksByUser();
   } catch (err) {
     logger.error('[DailyDigest] Failed to fetch tasks from Laravel', { error: err.message });
     return;
@@ -65,23 +56,6 @@ async function run() {
   await notificationService.sendDailyDigests(digestMap);
 
   logger.info('[DailyDigest] Completed', { users_notified: Object.keys(digestMap).length });
-}
-
-/**
- * Get an admin JWT token for internal API calls.
- * In production, use a dedicated service account with a long-lived token.
- */
-/**
- * Returns the internal service token from environment config.
- * This token is a long-lived JWT generated for the service account.
- * It should NEVER be hardcoded — always read from INTERNAL_SERVICE_TOKEN env var.
- */
-function getAdminToken() {
-  const config = require('../config');
-  if (!config.internalServiceToken) {
-    throw new Error('[dailyDigest] INTERNAL_SERVICE_TOKEN is not configured');
-  }
-  return config.internalServiceToken;
 }
 
 module.exports = { run };

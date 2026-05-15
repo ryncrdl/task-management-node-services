@@ -13,11 +13,9 @@ const logger = require('../utils/logger');
 async function run() {
   logger.info('[DeadlineReminder] Starting job...');
 
-  const adminToken = getAdminToken();
-
   let upcomingTasks;
   try {
-    upcomingTasks = await laravelApi.getUpcomingDeadlines(adminToken);
+    upcomingTasks = await laravelApi.getUpcomingDeadlines();
   } catch (err) {
     logger.error('[DeadlineReminder] Failed to fetch upcoming deadlines', { error: err.message });
     return;
@@ -55,19 +53,6 @@ async function run() {
     tasks_found: upcomingTasks.length,
     users_notified: Object.keys(byUser).length,
   });
-}
-
-/**
- * Returns the internal service token from environment config.
- * This token is a long-lived JWT generated for the service account.
- * It should NEVER be hardcoded — always read from INTERNAL_SERVICE_TOKEN env var.
- */
-function getAdminToken() {
-  const config = require('../config');
-  if (!config.internalServiceToken) {
-    throw new Error('[deadlineReminder] INTERNAL_SERVICE_TOKEN is not configured');
-  }
-  return config.internalServiceToken;
 }
 
 module.exports = { run };

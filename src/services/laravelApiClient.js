@@ -65,36 +65,32 @@ async function getTask(taskId, token) {
 /**
  * Fetch tasks for a team from Laravel API.
  */
-async function getTeamTasks(teamId, filters = {}, token) {
-  const client = createUserClient(token);
-  const { data } = await client.get(`/teams/${teamId}/tasks`, { params: filters });
+async function getTeamTasks(teamId, filters = {}) {
+  const { data } = await internalClient.get(`/internal/teams/${teamId}/tasks`, { params: filters });
   return data;
 }
 
 /**
  * Fetch upcoming tasks due within 24 hours (internal call).
  */
-async function getUpcomingDeadlines(adminToken) {
-  const client = createUserClient(adminToken);
-  const { data } = await client.get('/internal/tasks/upcoming-deadlines');
+async function getUpcomingDeadlines() {
+  const { data } = await internalClient.get('/internal/tasks/upcoming-deadlines');
   return data.data || [];
 }
 
 /**
  * Fetch incomplete tasks grouped by user (internal call).
  */
-async function getIncompleteTasksByUser(adminToken) {
-  const client = createUserClient(adminToken);
-  const { data } = await client.get('/internal/tasks/incomplete-by-user');
+async function getIncompleteTasksByUser() {
+  const { data } = await internalClient.get('/internal/tasks/incomplete-by-user');
   return data.data || {};
 }
 
 /**
  * Fetch all teams.
  */
-async function getTeams(token) {
-  const client = createUserClient(token);
-  const { data } = await client.get('/teams');
+async function getTeams() {
+  const { data } = await internalClient.get('/internal/teams');
   return data.data || [];
 }
 
@@ -126,11 +122,10 @@ async function updateJobStatus(jobId, status, errorMessage = null) {
 }
 
 /**
- * Archive a task via Laravel API (internal, admin-only).
+ * Archive a task via Laravel API (internal).
  */
-async function archiveTask(taskId, adminToken) {
-  const client = createUserClient(adminToken);
-  const { data } = await client.delete(`/tasks/${taskId}/archive`);
+async function archiveTask(taskId) {
+  const { data } = await internalClient.delete(`/internal/tasks/${taskId}/archive`);
   return data;
 }
 

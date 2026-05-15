@@ -41,6 +41,51 @@ router.post('/trigger/notification-processor', adminOnly, async (req, res) => {
 });
 
 /**
+ * POST /api/cron/trigger/deadline-reminder
+ */
+router.post('/trigger/deadline-reminder', adminOnly, async (req, res) => {
+  try {
+    const { run } = require('../jobs/deadlineReminder');
+    logger.info('DeadlineReminder manually triggered by admin', { user: req.user.id });
+    await run();
+    res.json({ message: 'Deadline reminder job triggered successfully.' });
+  } catch (err) {
+    logger.error('DeadlineReminder manual trigger failed', { error: err.message });
+    res.status(500).json({ message: `Trigger failed: ${err.message}` });
+  }
+});
+
+/**
+ * POST /api/cron/trigger/daily-digest
+ */
+router.post('/trigger/daily-digest', adminOnly, async (req, res) => {
+  try {
+    const { run } = require('../jobs/dailyDigest');
+    logger.info('DailyDigest manually triggered by admin', { user: req.user.id });
+    await run();
+    res.json({ message: 'Daily digest job triggered successfully.' });
+  } catch (err) {
+    logger.error('DailyDigest manual trigger failed', { error: err.message });
+    res.status(500).json({ message: `Trigger failed: ${err.message}` });
+  }
+});
+
+/**
+ * POST /api/cron/trigger/task-cleanup
+ */
+router.post('/trigger/task-cleanup', adminOnly, async (req, res) => {
+  try {
+    const { run } = require('../jobs/taskCleanup');
+    logger.info('TaskCleanup manually triggered by admin', { user: req.user.id });
+    await run();
+    res.json({ message: 'Task cleanup job triggered successfully.' });
+  } catch (err) {
+    logger.error('TaskCleanup manual trigger failed', { error: err.message });
+    res.status(500).json({ message: `Trigger failed: ${err.message}` });
+  }
+});
+
+/**
  * GET /api/cron/status
  * Get current status of all cron jobs.
  */
