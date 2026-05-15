@@ -19,6 +19,10 @@ const logger = require('./utils/logger');
 
 const app = express();
 
+// Trust the first proxy (required on Render/Heroku/etc.) so that
+// express-rate-limit can read the real client IP from X-Forwarded-For
+app.set('trust proxy', 1);
+
 // ─── Security middleware ──────────────────────────────────────────────────────
 app.use(helmet());
 
