@@ -14,8 +14,8 @@ const JOB_REGISTRY = [];
 function startScheduler() {
   logger.info('Starting cron scheduler...');
 
-  // ── Job 1: Notification Queue Processor — every minute ────────────────────
-  const notifProcessor = cron.schedule('* * * * *', async () => {
+  // ── Job 1: Notification Queue Processor — every 30 seconds ───────────────
+  const notifProcessor = cron.schedule('*/30 * * * * *', async () => {
     logger.debug('[CRON] Processing pending notification jobs');
     try {
       const { processPendingJobs } = require('../services/notificationService');
@@ -23,8 +23,8 @@ function startScheduler() {
     } catch (err) {
       logger.error('[CRON] Notification processor failed', { error: err.message });
     }
-  });
-  JOB_REGISTRY.push({ name: 'notification-processor', schedule: '* * * * *', description: 'Process pending email notification jobs', task: notifProcessor });
+  }, { scheduled: true });
+  JOB_REGISTRY.push({ name: 'notification-processor', schedule: '*/30 * * * * *', description: 'Process pending email notification jobs', task: notifProcessor });
 
   // ── Job 2: Daily Digest — every morning at 8 AM ───────────────────────────
   const digest = cron.schedule('0 8 * * *', async () => {
