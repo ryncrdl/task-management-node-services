@@ -33,32 +33,44 @@ app.use(cors({
 }));
 
 // ─── Swagger UI (API Docs) ────────────────────────────────────────────────────
-try {
-  const openapiPath = path.resolve(__dirname, '../../task-management-laravel-api/openapi.yaml');
-  const swaggerDocument = yaml.load(fs.readFileSync(openapiPath, 'utf8'));
+// In production the Laravel service is separate, so fetch the spec over HTTP.
+// Locally, read it from the sibling repo folder.
+(async () => {
+  try {
+    let swaggerDocument;
+    const isProd = process.env.NODE_ENV === 'production';
 
-  // Pin the server to match the current environment — no dropdown confusion
-  const isProd = process.env.NODE_ENV === 'production';
-  swaggerDocument.servers = [
-    isProd
-      ? { url: 'https://task-management-laravel-api.onrender.com/api', description: 'Production' }
-      : { url: 'http://localhost:8000/api', description: 'Local development' },
-  ];
+    if (isProd) {
+      const axios = require('axios');
+      const laravelBase = (process.env.LARAVEL_API_URL || '').replace('/api', '');
+      const { data } = await axios.get(`${laravelBase}/openapi.yaml`, { responseType: 'text' });
+      swaggerDocument = yaml.load(data);
+    } else {
+      const openapiPath = path.resolve(__dirname, '../../task-management-laravel-api/openapi.yaml');
+      swaggerDocument = yaml.load(fs.readFileSync(openapiPath, 'utf8'));
+    }
 
-  // Strip the CSP header set by the global helmet() so Swagger UI can fetch
-  // the API from a different origin (e.g. localhost:8000 from localhost:3000)
-  const removeCsp = (_req, res, next) => { res.removeHeader('Content-Security-Policy'); next(); };
+    // Pin the server to match the current environment — no dropdown confusion
+    const laravelBase = isProd
+      ? (process.env.LARAVEL_API_URL || 'https://task-management-laravel-api.onrender.com/api')
+      : 'http://localhost:8000/api';
+    swaggerDocument.servers = [{ url: laravelBase }];
 
-  app.use(
-    '/api-docs',
-    removeCsp,
-    swaggerUi.serve,
-    swaggerUi.setup(swaggerDocument, { explorer: false }),
-  );
-  logger.info('Swagger UI available at /api-docs');
-} catch (err) {
-  logger.warn('Could not load openapi.yaml for Swagger UI', { error: err.message });
-}
+    // Strip the CSP header set by the global helmet() so Swagger UI can fetch
+    // the API from a different origin (e.g. localhost:8000 from localhost:3000)
+    const removeCsp = (_req, res, next) => { res.removeHeader('Content-Security-Policy'); next(); };
+
+    app.use(
+      '/api-docs',
+      removeCsp,
+      swaggerUi.serve,
+      swaggerUi.setup(swaggerDocument, { explorer: false }),
+    );
+    logger.info('Swagger UI available at /api-docs');
+  } catch (err) {
+    logger.warn('Could not load openapi.yaml for Swagger UI', { error: err.message });
+  }
+})();
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
