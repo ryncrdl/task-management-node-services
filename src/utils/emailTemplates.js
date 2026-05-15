@@ -361,12 +361,8 @@ async function sendViaResend(to, subject, html) {
     throw new Error('RESEND_API_KEY not configured — cannot fall back to Resend');
   }
   const resend = new Resend(config.mail.resendApiKey);
-  // Always use onboarding@resend.dev — Resend's shared sender domain that works
-  // without domain verification on free accounts. Custom `from` domains require
-  // verification at resend.com/domains.
-  const from = `${config.mail.fromName} <onboarding@resend.dev>`;
   const { data, error } = await resend.emails.send({
-    from,
+    from: `${config.mail.fromName} <${config.mail.resendFrom}>`,
     to,
     subject,
     html,
