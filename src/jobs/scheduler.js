@@ -6,12 +6,15 @@ const deadlineReminderJob = require('./deadlineReminder');
 const taskCleanupJob = require('./taskCleanup');
 const logger = require('../utils/logger');
 
-const scheduledJobs = [];
-
-// Expose metadata for the admin monitoring endpoint
-const JOB_REGISTRY = [];
+// Mutable arrays — cleared and repopulated on each startScheduler() call
+let scheduledJobs = [];
+let JOB_REGISTRY  = [];
 
 function startScheduler() {
+  // Clear previous registrations so restart doesn't duplicate
+  scheduledJobs = [];
+  JOB_REGISTRY  = [];
+
   logger.info('Starting cron scheduler...');
 
   // ── Job 1: Notification Queue Processor — every 30 seconds ───────────────
@@ -24,7 +27,7 @@ function startScheduler() {
       logger.error('[CRON] Notification processor failed', { error: err.message });
     }
   }, { scheduled: true });
-  JOB_REGISTRY.push({ name: 'notification-processor', schedule: '*/30 * * * * *', description: 'Process pending email notification jobs', task: notifProcessor });
+  JOB_REGISTRY.push({ name: 'notification-processor', schedule: '*/30 * * * * *', description: 'Process pending email notification jobs' });
 
   // ── Job 2: Daily Digest — every morning at 8 AM ───────────────────────────
   const digest = cron.schedule('0 8 * * *', async () => {
@@ -35,7 +38,7 @@ function startScheduler() {
       logger.error('[CRON] Daily digest failed', { error: err.message });
     }
   });
-  JOB_REGISTRY.push({ name: 'daily-digest', schedule: '0 8 * * *', description: 'Send daily task digest emails at 08:00 UTC', task: digest });
+  JOB_REGISTRY.push({ name: 'daily-digest', schedule: '0 8 * * *', description: 'Send daily task digest emails at 08:00 UTC' });
 
   // ── Job 3: Deadline Reminder — every 2 hours ──────────────────────────────
   const reminder = cron.schedule('0 */2 * * *', async () => {
@@ -46,7 +49,7 @@ function startScheduler() {
       logger.error('[CRON] Deadline reminder failed', { error: err.message });
     }
   });
-  JOB_REGISTRY.push({ name: 'deadline-reminder', schedule: '0 */2 * * *', description: 'Send deadline reminder emails every 2 hours', task: reminder });
+  JOB_REGISTRY.push({ name: 'deadline-reminder', schedule: '0 */2 * * *', description: 'Send deadline reminder emails every 2 hours' });
 
   // ── Job 4: Task Cleanup — every day at midnight ───────────────────────────
   const cleanup = cron.schedule('0 0 * * *', async () => {
@@ -57,7 +60,7 @@ function startScheduler() {
       logger.error('[CRON] Task cleanup failed', { error: err.message });
     }
   });
-  JOB_REGISTRY.push({ name: 'task-cleanup', schedule: '0 0 * * *', description: 'Archive or clean up old completed tasks at midnight', task: cleanup });
+  JOB_REGISTRY.push({ name: 'task-cleanup', schedule: '0 0 * * *', description: 'Archive or clean up old completed tasks at midnight' });
 
   scheduledJobs.push(notifProcessor, digest, reminder, cleanup);
 
@@ -68,6 +71,7 @@ function startScheduler() {
 
 function stopScheduler() {
   scheduledJobs.forEach((job) => job.stop());
+  scheduledJobs = [];
   logger.info('All cron jobs stopped.');
 }
 
@@ -76,7 +80,7 @@ function getCronStatus() {
     name:        j.name,
     schedule:    j.schedule,
     description: j.description,
-    running:     j.task.getStatus() === 'scheduled',
+    running:     scheduledJobs.length > 0,
   }));
 }
 

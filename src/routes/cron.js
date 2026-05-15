@@ -20,7 +20,7 @@ router.post('/restart', adminOnly, (req, res) => {
     res.json({ message: 'Cron scheduler restarted.', jobs: getCronStatus() });
   } catch (err) {
     logger.error('Failed to restart cron scheduler', { error: err.message });
-    res.status(500).json({ message: 'Failed to restart scheduler.' });
+    res.status(500).json({ message: `Failed to restart scheduler: ${err.message}` });
   }
 });
 
