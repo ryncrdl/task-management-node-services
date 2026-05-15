@@ -15,7 +15,7 @@ const httpServer = http.createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: {
     origin: process.env.CORS_ORIGIN || '*',
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   },
 });
 
