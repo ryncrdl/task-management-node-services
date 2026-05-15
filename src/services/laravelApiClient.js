@@ -36,7 +36,7 @@ const internalClient = axios.create({
   headers: {
     Accept: 'application/json',
     'Content-Type': 'application/json',
-    'X-Internal-Secret': config.internalServiceSecret,
+    'X-Service-Secret': config.internalServiceSecret,
   },
 });
 
@@ -99,6 +99,33 @@ async function getTeams(token) {
 }
 
 /**
+ * Enqueue a notification job via Laravel.
+ */
+async function createJob(payload) {
+  const { data } = await internalClient.post('/internal/jobs', payload);
+  return data;
+}
+
+/**
+ * Claim pending notification jobs (marks them as 'processing' atomically).
+ */
+async function claimPendingJobs() {
+  const { data } = await internalClient.get('/internal/jobs/pending');
+  return data.data || [];
+}
+
+/**
+ * Update a job's status after processing.
+ */
+async function updateJobStatus(jobId, status, errorMessage = null) {
+  const { data } = await internalClient.patch(`/internal/jobs/${jobId}`, {
+    status,
+    error_message: errorMessage,
+  });
+  return data;
+}
+
+/**
  * Archive a task via Laravel API (internal, admin-only).
  */
 async function archiveTask(taskId, adminToken) {
@@ -116,4 +143,7 @@ module.exports = {
   getIncompleteTasksByUser,
   getTeams,
   archiveTask,
+  createJob,
+  claimPendingJobs,
+  updateJobStatus,
 };

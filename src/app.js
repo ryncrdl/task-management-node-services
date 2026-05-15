@@ -77,6 +77,10 @@ if (process.env.NODE_ENV !== 'production') {
       tpl = emailTemplates.dailyDigest({ userName: 'Ryan Cordial', tasks: SAMPLE_TASKS });
     } else if (type === 'digest-empty') {
       tpl = emailTemplates.dailyDigest({ userName: 'Ryan Cordial', tasks: [] });
+    } else if (type === 'mentioned') {
+      tpl = emailTemplates.mentioned({ userName: 'Ryan Cordial', taskTitle: 'Set up CI/CD pipeline', teamName: 'Engineering', commentBody: 'Hey @Ryan Cordial can you take a look at this before we deploy?', mentionedBy: 'Admin User', taskUrl: `${frontendUrl}/tasks/5` });
+    } else if (type === 'deactivated') {
+      tpl = emailTemplates.deactivated({ userName: 'Ryan Cordial', deactivatedBy: 'Admin User' });
     } else {
       return res.status(404).send('Unknown type. Try: assigned | status | deadline | digest | digest-empty');
     }

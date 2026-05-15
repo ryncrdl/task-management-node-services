@@ -2,104 +2,65 @@
 
 const { emailTemplates, getTransporter } = require('../utils/emailTemplates');
 const laravelApi = require('./laravelApiClient');
-const config = require('../config');
-const logger = require('../utils/logger');
-
-// In-memory queue for async notification processing
-const notificationQueue = [];
-let isProcessing = false;
+const config     = require('../config');
+const logger     = require('../utils/logger');
 
 /**
- * Queue a notification job for async processing.
- * Returns immediately after adding to queue.
+ * Persist a notification job to Laravel/PostgreSQL and return the new job id.
  */
-function queueNotification(payload) {
-  notificationQueue.push({
-    ...payload,
-    enqueuedAt: Date.now(),
-    attempts: 0,
-  });
-
-  logger.info('Notification queued', {
-    task_id: payload.task_id,
-    user_id: payload.user_id,
+async function queueNotification(payload) {
+  const job = await laravelApi.createJob({
+    task_id:    payload.task_id    ?? null,
+    user_id:    payload.user_id    ?? null,
     event_type: payload.event_type,
+    details:    payload.details    || {},
   });
-
-  // Start processing if not already running
-  if (!isProcessing) {
-    processQueue();
-  }
+  logger.info('Notification job queued', { job_id: job.id, event_type: payload.event_type });
+  return job.id;
 }
 
 /**
- * Process the notification queue sequentially with retry logic.
+ * Called by the cron job every minute.
+ * Claims pending jobs from Laravel, processes them, then reports status back.
  */
-async function processQueue() {
-  if (notificationQueue.length === 0) {
-    isProcessing = false;
-    return;
-  }
+async function processPendingJobs() {
+  const jobs = await laravelApi.claimPendingJobs();
+  if (jobs.length === 0) return;
 
-  isProcessing = true;
-  const job = notificationQueue.shift();
+  logger.info(`Processing ${jobs.length} notification job(s)`);
 
-  try {
-    await processNotification(job);
-  } catch (err) {
-    if (job.attempts < 3) {
-      job.attempts++;
-      logger.warn('Notification failed, requeueing', {
-        task_id: job.task_id,
-        attempt: job.attempts,
-        error: err.message,
-      });
-      // Re-add to back of queue for retry
-      notificationQueue.push(job);
-    } else {
-      logger.error('Notification permanently failed after 3 attempts', {
-        task_id: job.task_id,
-        error: err.message,
-      });
+  for (const job of jobs) {
+    try {
+      await processNotification(job);
+      await laravelApi.updateJobStatus(job.id, 'sent');
+    } catch (err) {
+      const currentAttempts = (job.attempts || 0) + 1; // +1 because Laravel will increment
+      const newStatus = currentAttempts >= 3 ? 'failed' : 'pending';
+      await laravelApi.updateJobStatus(job.id, newStatus, err.message);
+      logger.warn('Notification job failed', { job_id: job.id, attempt: currentAttempts, error: err.message });
     }
   }
-
-  // Continue processing remaining jobs
-  setImmediate(processQueue);
 }
 
 /**
- * Process a single notification job.
- * Fetches task/user details from Laravel and sends an email.
+ * Build and send the email for a single job row.
  */
 async function processNotification(job) {
-  const { task_id, user_id, event_type, details, token } = job;
+  const task_id    = job.task_id;
+  const user_id    = job.user_id;
+  const event_type = job.event_type;
+  const details    = typeof job.details === 'string' ? JSON.parse(job.details) : (job.details || {});
 
   if (!user_id) {
-    logger.debug('Notification skipped — no user assigned', { task_id });
+    logger.debug('Notification skipped — no user_id', { task_id });
     return;
   }
 
-  // Fetch full task details from Laravel to get user email etc.
-  let task;
-  try {
-    if (token) {
-      task = await laravelApi.getTask(task_id, token);
-    } else {
-      // Use details provided inline (avoid extra HTTP call)
-      task = { id: task_id, ...details };
-    }
-  } catch (err) {
-    logger.warn('Could not fetch task details, using inline details', { task_id });
-    task = { id: task_id, ...details };
-  }
-
-  const userName = task?.assigned_to?.name || `User #${user_id}`;
-  const userEmail = task?.assigned_to?.email;
+  const userName  = details.assigned_to_name  || `User #${user_id}`;
+  const userEmail = details.assigned_to_email;
 
   if (!userEmail) {
-    logger.warn('Cannot send notification — no email address for user', { user_id });
-    return;
+    throw new Error(`No email address for user #${user_id}`);
   }
 
   let emailContent;
@@ -107,58 +68,62 @@ async function processNotification(job) {
   if (event_type === 'assigned') {
     emailContent = emailTemplates.taskAssigned({
       userName,
-      taskTitle: task.title || details?.task_title || 'Task',
-      taskDescription: task.description,
-      teamName: task?.team?.name,
-      priority: task.priority || details?.priority,
-      dueDate: task.due_date || details?.due_date,
-      taskUrl: `${config.frontendUrl}/tasks/${task.id || task_id}`,
+      taskTitle:       details.task_title,
+      taskDescription: details.description,
+      teamName:        details.team_name,
+      priority:        details.priority,
+      dueDate:         details.due_date,
+      taskUrl:         task_id ? `${config.frontendUrl}/tasks/${task_id}` : null,
     });
   } else if (event_type === 'status_changed') {
     emailContent = emailTemplates.statusChanged({
       userName,
-      taskTitle: task.title || details?.task_title || 'Task',
-      oldStatus: details?.old_status || 'unknown',
-      newStatus: task.status || details?.task_status || 'unknown',
-      teamName: task?.team?.name,
-      taskUrl: `${config.frontendUrl}/tasks/${task.id || task_id}`,
+      taskTitle: details.task_title || 'Task',
+      oldStatus: details.old_status || 'unknown',
+      newStatus: details.task_status || 'unknown',
+      teamName:  details.team_name,
+      taskUrl:   task_id ? `${config.frontendUrl}/tasks/${task_id}` : null,
+    });
+  } else if (event_type === 'mentioned') {
+    emailContent = emailTemplates.mentioned({
+      userName,
+      taskTitle:   details.task_title   || 'a task',
+      teamName:    details.team_name,
+      commentBody: details.comment_body || '',
+      mentionedBy: details.mentioned_by || 'Someone',
+      taskUrl:     task_id ? `${config.frontendUrl}/tasks/${task_id}` : null,
+    });
+  } else if (event_type === 'deactivated') {
+    emailContent = emailTemplates.deactivated({
+      userName,
+      deactivatedBy: details.deactivated_by || 'an administrator',
+    });
+  } else if (event_type === 'reactivated') {
+    emailContent = emailTemplates.reactivated({
+      userName,
+      reactivatedBy: details.reactivated_by || 'an administrator',
     });
   } else {
-    logger.warn('Unknown event_type, skipping notification', { event_type });
-    return;
+    throw new Error(`Unknown event_type: ${event_type}`);
   }
 
   await sendEmail(userEmail, emailContent.subject, emailContent.html);
-
-  logger.info('Notification sent', {
-    task_id,
-    user_id,
-    event_type,
-    recipient: userEmail,
-  });
+  logger.info('Notification sent', { task_id, user_id, event_type, recipient: userEmail });
 }
 
 /**
- * Send an email using Nodemailer.
- * Logs errors instead of throwing so caller isn't disrupted.
+ * Send an email via Nodemailer. Throws on failure so caller can handle retry.
  */
 async function sendEmail(to, subject, html) {
   const transporter = getTransporter();
-
-  try {
-    const info = await transporter.sendMail({
-      from: `"${config.mail.fromName}" <${config.mail.from}>`,
-      to,
-      subject,
-      html,
-    });
-
-    logger.info('Email sent', { messageId: info.messageId, to });
-    return info;
-  } catch (err) {
-    logger.error('Email send failed', { to, subject, error: err.message });
-    throw err; // Re-throw so the queue can retry
-  }
+  const info = await transporter.sendMail({
+    from: `"${config.mail.fromName}" <${config.mail.from}>`,
+    to,
+    subject,
+    html,
+  });
+  logger.info('Email sent', { messageId: info.messageId, to });
+  return info;
 }
 
 /**
@@ -167,11 +132,9 @@ async function sendEmail(to, subject, html) {
 async function sendDeadlineReminders(userTaskGroups) {
   for (const [userEmail, data] of Object.entries(userTaskGroups)) {
     try {
-      const { userName, tasks } = data;
-      const emailContent = emailTemplates.deadlineReminder({ userName, tasks });
+      const emailContent = emailTemplates.deadlineReminder({ userName: data.userName, tasks: data.tasks });
       await sendEmail(userEmail, emailContent.subject, emailContent.html);
     } catch (err) {
-      // Log but continue to other users
       logger.error('Deadline reminder failed', { userEmail, error: err.message });
     }
   }
@@ -183,8 +146,7 @@ async function sendDeadlineReminders(userTaskGroups) {
 async function sendDailyDigests(userTaskGroups) {
   for (const [userEmail, data] of Object.entries(userTaskGroups)) {
     try {
-      const { userName, tasks } = data;
-      const emailContent = emailTemplates.dailyDigest({ userName, tasks });
+      const emailContent = emailTemplates.dailyDigest({ userName: data.userName, tasks: data.tasks });
       await sendEmail(userEmail, emailContent.subject, emailContent.html);
     } catch (err) {
       logger.error('Daily digest failed', { userEmail, error: err.message });
@@ -194,6 +156,7 @@ async function sendDailyDigests(userTaskGroups) {
 
 module.exports = {
   queueNotification,
+  processPendingJobs,
   processNotification,
   sendEmail,
   sendDeadlineReminders,

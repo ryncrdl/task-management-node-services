@@ -42,6 +42,14 @@ module.exports = {
 
   redisUrl: process.env.REDIS_URL || null,
 
+  db: {
+    host:     process.env.DB_HOST     || '127.0.0.1',
+    port:     parseInt(process.env.DB_PORT, 10) || 5432,
+    database: process.env.DB_DATABASE || 'task_management',
+    user:     process.env.DB_USERNAME || 'postgres',
+    password: process.env.DB_PASSWORD || '',
+  },
+
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
     max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,

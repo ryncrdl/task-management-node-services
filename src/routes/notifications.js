@@ -1,10 +1,10 @@
 'use strict';
 
 const express = require('express');
-const config = require('../config');
+const config  = require('../config');
 const { notificationLimiter } = require('../middleware/rateLimiter');
-const notificationService = require('../services/notificationService');
-const logger = require('../utils/logger');
+const laravelApi = require('../services/laravelApiClient');
+const logger  = require('../utils/logger');
 
 const router = express.Router();
 
@@ -25,38 +25,36 @@ function internalAuth(req, res, next) {
  * Internal endpoint called by Laravel when a task is assigned or status changes.
  * Returns immediately — processing is async (fire & forget).
  */
-router.post('/send', notificationLimiter, internalAuth, (req, res) => {
+router.post('/send', notificationLimiter, internalAuth, async (req, res) => {
   const { task_id, user_id, event_type, details } = req.body;
 
   // Validate required fields
-  if (!task_id || !event_type) {
+  if (!event_type) {
     return res.status(422).json({
       message: 'Validation failed.',
       errors: {
-        task_id: !task_id ? ['task_id is required.'] : [],
-        event_type: !event_type ? ['event_type is required.'] : [],
+        event_type: ['event_type is required.'],
       },
     });
   }
 
-  const validEventTypes = ['assigned', 'status_changed'];
+  const validEventTypes = ['assigned', 'status_changed', 'mentioned', 'deactivated', 'reactivated'];
   if (!validEventTypes.includes(event_type)) {
     return res.status(422).json({
       message: `event_type must be one of: ${validEventTypes.join(', ')}.`,
     });
   }
 
-  // Queue the notification asynchronously
-  notificationService.queueNotification({
-    task_id,
-    user_id,
-    event_type,
-    details: details || {},
-  });
+  // Queue the notification via Laravel API
+  try {
+    const job = await laravelApi.createJob({ task_id, user_id, event_type, details: details || {} });
+    logger.info('Notification job persisted', { job_id: job.id, event_type });
+  } catch (err) {
+    logger.error('Failed to persist notification job', { error: err.message });
+    return res.status(502).json({ message: 'Failed to queue notification.' });
+  }
 
-  logger.info('Notification queued via API', { task_id, user_id, event_type });
-
-  // Return immediately — processing continues in background
+  // Return immediately — cron will pick it up within 1 minute
   return res.status(202).json({
     message: 'Notification queued successfully.',
     queued: true,

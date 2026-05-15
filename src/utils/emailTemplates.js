@@ -243,6 +243,86 @@ const emailTemplates = {
       }),
     };
   },
+
+  mentioned: ({ userName, taskTitle, teamName, commentBody, mentionedBy, taskUrl }) => ({
+    subject: `${mentionedBy} mentioned you in a comment`,
+    html: base({
+      headerColor: '#0891b2',
+      headerIcon: '💬',
+      headerTitle: 'You Were Mentioned',
+      headerSubtitle: `${mentionedBy} tagged you in a comment`,
+      preheader: `${mentionedBy} mentioned you on "${taskTitle}".`,
+      footerNote: 'You received this because you were @mentioned in a comment.',
+      body: `
+        <p style="margin:0 0 20px;">Hi <strong>${userName}</strong>,</p>
+        <p style="margin:0 0 24px;"><strong>${mentionedBy}</strong> mentioned you in a comment on a task.</p>
+
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+          <tr><td style="background:#f9fafb;padding:14px 16px;border-bottom:1px solid #e5e7eb;">
+            <span style="font-size:16px;font-weight:700;color:#111827;">${taskTitle}</span>
+            ${teamName ? `<span style="margin-left:8px;font-size:12px;color:#6b7280;">· ${teamName}</span>` : ''}
+          </td></tr>
+          ${commentBody ? `
+          <tr><td style="padding:16px;">
+            <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;font-weight:600;">Comment</p>
+            <p style="margin:0;font-size:14px;color:#374151;background:#f0f9ff;border-left:3px solid #0891b2;padding:10px 14px;border-radius:0 6px 6px 0;">${commentBody}</p>
+          </td></tr>` : ''}
+        </table>
+
+        ${taskUrl ? `
+        <table cellpadding="0" cellspacing="0"><tr><td>
+          <a href="${taskUrl}" style="display:inline-block;background:#0891b2;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:8px;">View Task →</a>
+        </td></tr></table>` : ''}
+      `,
+    }),
+  }),
+
+  deactivated: ({ userName, deactivatedBy }) => ({
+    subject: `Your TaskFlow account has been deactivated`,
+    html: base({
+      headerColor: '#dc2626',
+      headerIcon: '🔒',
+      headerTitle: 'Account Deactivated',
+      headerSubtitle: 'Your access to TaskFlow has been suspended',
+      preheader: 'Your TaskFlow account has been deactivated.',
+      footerNote: 'If you believe this is a mistake, please contact your administrator.',
+      body: `
+        <p style="margin:0 0 20px;">Hi <strong>${userName}</strong>,</p>
+        <p style="margin:0 0 24px;">Your <strong>TaskFlow</strong> account has been deactivated by <strong>${deactivatedBy}</strong>.</p>
+
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fecaca;border-radius:8px;background:#fef2f2;margin-bottom:24px;">
+          <tr><td style="padding:16px 20px;">
+            <p style="margin:0;font-size:14px;color:#991b1b;">You will no longer be able to log in or receive task assignments until your account is reactivated by an administrator.</p>
+          </td></tr>
+        </table>
+
+        <p style="margin:0;font-size:14px;color:#6b7280;">If you believe this was done in error, please reach out to your team administrator directly.</p>
+      `,
+    }),
+  }),
+
+  reactivated: ({ userName, reactivatedBy }) => ({
+    subject: `Your TaskFlow account has been reactivated`,
+    html: base({
+      headerColor: '#16a34a',
+      headerIcon: '✅',
+      headerTitle: 'Account Reactivated',
+      headerSubtitle: 'Your access to TaskFlow has been restored',
+      preheader: 'Your TaskFlow account has been reactivated.',
+      footerNote: 'You received this because your account status was changed.',
+      body: `
+        <p style="margin:0 0 20px;">Hi <strong>${userName}</strong>,</p>
+        <p style="margin:0 0 24px;">Good news! Your <strong>TaskFlow</strong> account has been reactivated by <strong>${reactivatedBy}</strong>. You can now log in and resume your work.</p>
+
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #bbf7d0;border-radius:8px;background:#f0fdf4;margin-bottom:24px;">
+          <tr><td style="padding:16px 20px;">
+            <p style="margin:0;font-size:14px;color:#166534;">Your account is fully restored. All your previous tasks and team memberships are intact.</p>
+          </td></tr>
+        </table>
+      `,
+    }),
+  }),
+
 };
 
 // Lazy-init transporter to allow testing without SMTP
