@@ -32,7 +32,6 @@ module.exports = {
   internalServiceSecret: process.env.INTERNAL_SERVICE_SECRET,
 
   mail: {
-    resendApiKey: process.env.RESEND_API_KEY || null,
     host: process.env.MAIL_HOST || 'localhost',
     port: parseInt(process.env.MAIL_PORT, 10) || 1025,
     user: process.env.MAIL_USER || '',
