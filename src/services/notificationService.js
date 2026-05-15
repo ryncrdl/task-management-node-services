@@ -110,8 +110,9 @@ async function processNotification(job) {
       taskTitle: task.title || details?.task_title || 'Task',
       taskDescription: task.description,
       teamName: task?.team?.name,
+      priority: task.priority || details?.priority,
       dueDate: task.due_date || details?.due_date,
-      taskUrl: null, // Set to frontend URL if available
+      taskUrl: `${config.frontendUrl}/tasks/${task.id || task_id}`,
     });
   } else if (event_type === 'status_changed') {
     emailContent = emailTemplates.statusChanged({
@@ -120,6 +121,7 @@ async function processNotification(job) {
       oldStatus: details?.old_status || 'unknown',
       newStatus: task.status || details?.task_status || 'unknown',
       teamName: task?.team?.name,
+      taskUrl: `${config.frontendUrl}/tasks/${task.id || task_id}`,
     });
   } else {
     logger.warn('Unknown event_type, skipping notification', { event_type });

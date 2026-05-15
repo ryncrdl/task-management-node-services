@@ -54,6 +54,38 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/export', exportRouter);
 app.use('/api/broadcast', broadcastRouter);
 
+// ─── Email preview (dev only) ─────────────────────────────────────────────────
+if (process.env.NODE_ENV !== 'production') {
+  const { emailTemplates } = require('./utils/emailTemplates');
+  const SAMPLE_TASKS = [
+    { title: 'Set up CI/CD pipeline', status: 'in_progress', priority: 'high',   due_date: new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString() },
+    { title: 'Write unit tests',      status: 'pending',     priority: 'medium', due_date: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString() },
+    { title: 'Update README',         status: 'pending',     priority: 'low',    due_date: null },
+  ];
+  const removeCsp = (_req, res, next) => { res.removeHeader('Content-Security-Policy'); next(); };
+  app.get('/email-preview/:type', removeCsp, (req, res) => {
+    const type = req.params.type;
+    const frontendUrl = require('./config').frontendUrl;
+    let tpl;
+    if (type === 'assigned') {
+      tpl = emailTemplates.taskAssigned({ userName: 'Ryan Cordial', taskTitle: 'Set up CI/CD pipeline', taskDescription: 'Configure GitHub Actions for automated testing and deployment.', teamName: 'Engineering', priority: 'high', dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), taskUrl: `${frontendUrl}/tasks/5` });
+    } else if (type === 'status') {
+      tpl = emailTemplates.statusChanged({ userName: 'Ryan Cordial', taskTitle: 'Set up CI/CD pipeline', oldStatus: 'pending', newStatus: 'in_progress', teamName: 'Engineering', taskUrl: `${frontendUrl}/tasks/5` });
+    } else if (type === 'deadline') {
+      tpl = emailTemplates.deadlineReminder({ userName: 'Ryan Cordial', tasks: SAMPLE_TASKS.slice(0, 2) });
+    } else if (type === 'digest') {
+      tpl = emailTemplates.dailyDigest({ userName: 'Ryan Cordial', tasks: SAMPLE_TASKS });
+    } else if (type === 'digest-empty') {
+      tpl = emailTemplates.dailyDigest({ userName: 'Ryan Cordial', tasks: [] });
+    } else {
+      return res.status(404).send('Unknown type. Try: assigned | status | deadline | digest | digest-empty');
+    }
+    res.setHeader('Content-Type', 'text/html');
+    res.send(tpl.html);
+  });
+  logger.info('Email preview available at /email-preview/:type  (assigned|status|deadline|digest)');
+}
+
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found.' });

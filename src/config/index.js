@@ -20,6 +20,7 @@ module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
 
   laravelApiUrl: required('LARAVEL_API_URL'),
+  frontendUrl: process.env.FRONTEND_URL || 'https://task-management-react-e9ni.onrender.com',
   jwtSecret: required('JWT_SECRET'),
   /**
    * Long-lived JWT token for internal service-to-service calls (cron jobs).
