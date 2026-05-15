@@ -1,14 +1,14 @@
 'use strict';
 
 const express = require('express');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const exportService = require('../services/exportService');
 const logger = require('../utils/logger');
 
 const router = express.Router();
 
-// Export requires authentication and admin/manager role
-router.use(authenticate, requireRole('admin', 'manager'));
+// Export requires authentication (all roles allowed — data is scoped to the team)
+router.use(authenticate);
 
 /**
  * POST /api/export/tasks
