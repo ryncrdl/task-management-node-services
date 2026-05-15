@@ -20,7 +20,7 @@ module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
 
   laravelApiUrl: required('LARAVEL_API_URL'),
-  frontendUrl: process.env.FRONTEND_URL || 'https://task-management-react-e9ni.onrender.com',
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   jwtSecret: required('JWT_SECRET'),
   /**
    * Long-lived JWT token for internal service-to-service calls (cron jobs).
@@ -35,8 +35,10 @@ module.exports = {
     host: process.env.MAIL_HOST || 'localhost',
     port: parseInt(process.env.MAIL_PORT, 10) || 1025,
     user: process.env.MAIL_USER || '',
-    pass: process.env.MAIL_PASS || '',
-    from: process.env.MAIL_FROM || 'noreply@taskmanagement.com',
+    // Strip whitespace — Gmail app passwords are 16 chars with no spaces,
+    // but users often copy them with spaces (e.g. "xxxx xxxx xxxx xxxx").
+    pass: (process.env.MAIL_PASS || '').replace(/\s+/g, ''),
+    from:     process.env.MAIL_FROM     || process.env.MAIL_USER || 'noreply@taskmanagement.com',
     fromName: process.env.MAIL_FROM_NAME || 'Task Management',
   },
 

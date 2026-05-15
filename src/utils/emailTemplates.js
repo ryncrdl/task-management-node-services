@@ -331,9 +331,11 @@ let _transporter = null;
 function getTransporter() {
   if (!_transporter) {
     _transporter = nodemailer.createTransport({
-      host: config.mail.host,
-      port: config.mail.port,
-      auth: config.mail.user ? { user: config.mail.user, pass: config.mail.pass } : undefined,
+      service: 'gmail',
+      auth: { user: config.mail.user, pass: config.mail.pass },
+      connectionTimeout: 30000,
+      greetingTimeout:   15000,
+      socketTimeout:     30000,
     });
   }
   return _transporter;
