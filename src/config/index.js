@@ -32,11 +32,10 @@ module.exports = {
   internalServiceSecret: process.env.INTERNAL_SERVICE_SECRET,
 
   mail: {
+    resendApiKey: process.env.RESEND_API_KEY || null,
     host: process.env.MAIL_HOST || 'localhost',
     port: parseInt(process.env.MAIL_PORT, 10) || 1025,
     user: process.env.MAIL_USER || '',
-    // Strip whitespace — Gmail app passwords are 16 chars with no spaces,
-    // but users often copy them with spaces (e.g. "xxxx xxxx xxxx xxxx").
     pass: (process.env.MAIL_PASS || '').replace(/\s+/g, ''),
     from:     process.env.MAIL_FROM     || process.env.MAIL_USER || 'noreply@taskmanagement.com',
     fromName: process.env.MAIL_FROM_NAME || 'Task Management',

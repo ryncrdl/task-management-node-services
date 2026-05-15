@@ -1,6 +1,7 @@
 'use strict';
 
 const nodemailer = require('nodemailer');
+const { Resend }  = require('resend');
 const config = require('../config');
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -325,20 +326,50 @@ const emailTemplates = {
 
 };
 
-// Lazy-init transporter to allow testing without SMTP
-let _transporter = null;
+// ─── Email sender ─────────────────────────────────────────────────────────────
 
-function getTransporter() {
+/**
+ * Send an email.
+ * - If RESEND_API_KEY is set: uses Resend HTTP API (works on all cloud platforms)
+ * - Otherwise: falls back to nodemailer SMTP (for local dev with Mailpit etc.)
+ */
+async function sendEmail(to, subject, html) {
+  if (config.mail.resendApiKey) {
+    const resend = new Resend(config.mail.resendApiKey);
+    const { data, error } = await resend.emails.send({
+      from: `${config.mail.fromName} <${config.mail.from}>`,
+      to,
+      subject,
+      html,
+    });
+    if (error) throw new Error(error.message || JSON.stringify(error));
+    return data;
+  }
+
+  // Local dev fallback — SMTP via nodemailer
   if (!_transporter) {
     _transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: config.mail.user, pass: config.mail.pass },
-      connectionTimeout: 30000,
-      greetingTimeout:   15000,
-      socketTimeout:     30000,
+      host: config.mail.host,
+      port: config.mail.port,
+      secure: config.mail.port === 465,
+      auth: config.mail.user ? { user: config.mail.user, pass: config.mail.pass } : undefined,
+      connectionTimeout: 10000,
+      greetingTimeout:   5000,
+      socketTimeout:     10000,
     });
   }
-  return _transporter;
+  const info = await _transporter.sendMail({
+    from: `"${config.mail.fromName}" <${config.mail.from}>`,
+    to,
+    subject,
+    html,
+  });
+  return info;
 }
 
-module.exports = { emailTemplates, getTransporter };
+let _transporter = null;
+
+// getTransporter kept for backward-compat but sendEmail is the primary interface
+function getTransporter() { return _transporter; }
+
+module.exports = { emailTemplates, getTransporter, sendEmail };
