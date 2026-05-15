@@ -112,9 +112,22 @@ async function processNotification(job) {
 }
 
 /**
+ * Basic RFC-5322-compatible email validation.
+ */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(address) {
+  return typeof address === 'string' && EMAIL_RE.test(address.trim());
+}
+
+/**
  * Send an email. Tries SMTP first, falls back to Resend on connection errors.
  */
 async function sendEmail(to, subject, html) {
+  if (!isValidEmail(to)) {
+    logger.warn('Skipping email — invalid recipient address', { to });
+    return null;
+  }
   const { sendEmail: _send } = require('../utils/emailTemplates');
   return _send(to, subject, html);
 }
