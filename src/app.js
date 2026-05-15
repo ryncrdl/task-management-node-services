@@ -11,6 +11,7 @@ const notificationsRouter = require('./routes/notifications');
 const analyticsRouter = require('./routes/analytics');
 const exportRouter = require('./routes/export');
 const broadcastRouter = require('./routes/broadcast');
+const cronRouter = require('./routes/cron');
 const logger = require('./utils/logger');
 
 const app = express();
@@ -53,6 +54,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/export', exportRouter);
 app.use('/api/broadcast', broadcastRouter);
+app.use('/api/cron', cronRouter);
 
 // ─── Email preview (dev only) ─────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'production') {

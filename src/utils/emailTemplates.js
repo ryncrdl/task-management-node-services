@@ -325,8 +325,7 @@ const emailTemplates = {
 
 };
 
-// ─── Email sender ─────────────────────────────────────────────────────────────
-
+// Lazy-init transporter to allow testing without SMTP
 let _transporter = null;
 
 function getTransporter() {
@@ -334,24 +333,10 @@ function getTransporter() {
     _transporter = nodemailer.createTransport({
       host: config.mail.host,
       port: config.mail.port,
-      secure: config.mail.port === 465,
-      auth: { user: config.mail.user, pass: config.mail.pass },
-      connectionTimeout: 30000,
-      socketTimeout:     30000,
+      auth: config.mail.user ? { user: config.mail.user, pass: config.mail.pass } : undefined,
     });
   }
   return _transporter;
 }
 
-async function sendEmail(to, subject, html) {
-  const transporter = getTransporter();
-  const info = await transporter.sendMail({
-    from: `"${config.mail.fromName}" <${config.mail.from}>`,
-    to,
-    subject,
-    html,
-  });
-  return info;
-}
-
-module.exports = { emailTemplates, getTransporter, sendEmail };
+module.exports = { emailTemplates, getTransporter };

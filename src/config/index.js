@@ -35,8 +35,8 @@ module.exports = {
     host: process.env.MAIL_HOST || 'localhost',
     port: parseInt(process.env.MAIL_PORT, 10) || 1025,
     user: process.env.MAIL_USER || '',
-    pass: (process.env.MAIL_PASS || '').replace(/\s+/g, ''),
-    from:     process.env.MAIL_FROM     || process.env.MAIL_USER || 'noreply@taskmanagement.com',
+    pass: process.env.MAIL_PASS || '',
+    from: process.env.MAIL_FROM || 'noreply@taskmanagement.com',
     fromName: process.env.MAIL_FROM_NAME || 'Task Management',
   },
 
