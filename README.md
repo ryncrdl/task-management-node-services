@@ -13,6 +13,8 @@ Handles: **Email Notifications**, **Analytics**, **Data Exports**, and **Schedul
 | **Service Base** | `https://task-management-node-services.onrender.com` |
 | **Health Check** | `https://task-management-node-services.onrender.com/health` |
 | **GitHub** | `https://github.com/ryncrdl/task-management-node-services` |
+| **Frontend** | `https://task-management-react-e9ni.onrender.com` |
+| **Laravel API** | `https://task-management-laravel-api.onrender.com/api` |
 
 ---
 
