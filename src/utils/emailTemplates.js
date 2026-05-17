@@ -1,9 +1,10 @@
 'use strict';
 
 const nodemailer = require('nodemailer');
-const { Resend }  = require('resend');
-const config = require('../config');
-const logger = require('../utils/logger');
+const axios      = require('axios');
+const { Resend } = require('resend');
+const config     = require('../config');
+const logger     = require('../utils/logger');
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -344,8 +345,13 @@ function getTransporter() {
   return _transporter;
 }
 
-// Connection-related error codes/messages that warrant a Resend fallback
-const CONNECTION_ERRORS = ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET', 'connection timeout', 'Connection timeout'];
+// Errors that mean SMTP won't work and we should fall back to HTTP API
+const CONNECTION_ERRORS = [
+  'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET',
+  'connection timeout', 'Connection timeout',
+  // IP authorization rejections (e.g. Brevo SMTP from cloud hosts)
+  'Unauthorized IP', '525', 'Invalid login',
+];
 
 function isConnectionError(err) {
   const msg = err.message || '';
@@ -353,7 +359,31 @@ function isConnectionError(err) {
 }
 
 /**
- * Send via Resend HTTP API (fallback when SMTP times out).
+ * Send via Brevo HTTP API — no IP restrictions, works from any cloud host.
+ * Requires BREVO_API_KEY env var.
+ */
+async function sendViaBrevoApi(to, subject, html) {
+  if (!config.mail.brevoApiKey) {
+    throw new Error('BREVO_API_KEY not configured');
+  }
+  const response = await axios.post(
+    'https://api.brevo.com/v3/smtp/email',
+    {
+      sender:      { name: config.mail.fromName, email: config.mail.from },
+      to:          [{ email: to }],
+      subject,
+      htmlContent: html,
+    },
+    {
+      headers: { 'api-key': config.mail.brevoApiKey, 'content-type': 'application/json' },
+      timeout: 15000,
+    },
+  );
+  return response.data;
+}
+
+/**
+ * Send via Resend HTTP API (last-resort fallback).
  * Requires RESEND_API_KEY env var.
  */
 async function sendViaResend(to, subject, html) {
@@ -373,9 +403,10 @@ async function sendViaResend(to, subject, html) {
 
 /**
  * Primary send function.
- * Tries Gmail SMTP first; if a connection/timeout error occurs, falls back to Resend.
+ * Chain: SMTP → Brevo HTTP API → Resend (last resort).
  */
 async function sendEmail(to, subject, html) {
+  // ── 1. Try SMTP ──────────────────────────────────────────────────────────
   try {
     const transporter = getTransporter();
     const info = await transporter.sendMail({
@@ -385,19 +416,28 @@ async function sendEmail(to, subject, html) {
       html,
     });
     logger.info('Email sent via SMTP', { to });
-    // Reset transporter on success so next call reuses it
     return info;
   } catch (err) {
-    if (isConnectionError(err)) {
-      logger.warn('SMTP connection failed, falling back to Resend', { error: err.message, to });
-      // Reset transporter so next attempt creates a fresh connection
-      _transporter = null;
-      const result = await sendViaResend(to, subject, html);
-      logger.info('Email sent via Resend fallback', { to });
-      return result;
-    }
-    throw err;
+    if (!isConnectionError(err)) throw err;
+    logger.warn('SMTP failed, falling back to Brevo API', { error: err.message, to });
+    _transporter = null;
   }
+
+  // ── 2. Try Brevo HTTP API ─────────────────────────────────────────────────
+  if (config.mail.brevoApiKey) {
+    try {
+      const result = await sendViaBrevoApi(to, subject, html);
+      logger.info('Email sent via Brevo API', { to });
+      return result;
+    } catch (err) {
+      logger.warn('Brevo API failed, falling back to Resend', { error: err.message, to });
+    }
+  }
+
+  // ── 3. Last resort: Resend ────────────────────────────────────────────────
+  const result = await sendViaResend(to, subject, html);
+  logger.info('Email sent via Resend', { to });
+  return result;
 }
 
 module.exports = { emailTemplates, getTransporter, sendEmail };

@@ -38,7 +38,9 @@ module.exports = {
     pass: (process.env.MAIL_PASS || '').replace(/\s+/g, ''),
     from:     process.env.MAIL_FROM     || process.env.MAIL_USER || 'noreply@taskmanagement.com',
     fromName: process.env.MAIL_FROM_NAME || 'Task Management',
-    // Resend fallback (used when SMTP connection times out)
+    // Brevo HTTP API fallback (no IP restrictions, preferred over SMTP on cloud hosts)
+    brevoApiKey: process.env.BREVO_API_KEY || null,
+    // Resend (last-resort fallback)
     resendApiKey: process.env.RESEND_API_KEY || null,
     resendFrom:   process.env.RESEND_FROM    || 'onboarding@resend.dev',
   },

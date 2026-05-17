@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
-const { startScheduler, stopScheduler, getCronStatus } = require('../jobs/scheduler');
+const { startScheduler, stopScheduler, pauseJob, resumeJob, getCronStatus } = require('../jobs/scheduler');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -82,6 +82,34 @@ router.post('/trigger/task-cleanup', adminOnly, async (req, res) => {
   } catch (err) {
     logger.error('TaskCleanup manual trigger failed', { error: err.message });
     res.status(500).json({ message: `Trigger failed: ${err.message}` });
+  }
+});
+
+/**
+ * POST /api/cron/pause/:jobName
+ * Pause a single cron job.
+ */
+router.post('/pause/:jobName', adminOnly, (req, res) => {
+  try {
+    pauseJob(req.params.jobName);
+    logger.info('Cron job paused by admin', { user: req.user.id, job: req.params.jobName });
+    res.json({ message: `Job "${req.params.jobName}" paused.`, jobs: getCronStatus() });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+/**
+ * POST /api/cron/resume/:jobName
+ * Resume a paused cron job.
+ */
+router.post('/resume/:jobName', adminOnly, (req, res) => {
+  try {
+    resumeJob(req.params.jobName);
+    logger.info('Cron job resumed by admin', { user: req.user.id, job: req.params.jobName });
+    res.json({ message: `Job "${req.params.jobName}" resumed.`, jobs: getCronStatus() });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 });
 

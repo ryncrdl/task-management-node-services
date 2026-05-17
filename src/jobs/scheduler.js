@@ -6,14 +6,23 @@ const deadlineReminderJob = require('./deadlineReminder');
 const taskCleanupJob = require('./taskCleanup');
 const logger = require('../utils/logger');
 
-// Mutable arrays — cleared and repopulated on each startScheduler() call
-let scheduledJobs = [];
-let JOB_REGISTRY  = [];
+/**
+ * jobsMap tracks each running ScheduledTask and its paused state.
+ * Shape: { [name]: { task: ScheduledTask, paused: boolean } }
+ */
+let jobsMap = {};
+
+const JOB_DEFS = [
+  { name: 'notification-processor', schedule: '*/30 * * * * *', description: 'Process pending email notification jobs' },
+  { name: 'daily-digest',           schedule: '0 8 * * *',      description: 'Send daily task digest emails at 08:00 UTC' },
+  { name: 'deadline-reminder',      schedule: '0 */2 * * *',    description: 'Send deadline reminder emails every 2 hours' },
+  { name: 'task-cleanup',           schedule: '0 0 * * *',      description: 'Archive old completed tasks at midnight' },
+];
 
 function startScheduler() {
-  // Clear previous registrations so restart doesn't duplicate
-  scheduledJobs = [];
-  JOB_REGISTRY  = [];
+  // Stop any existing tasks before recreating
+  Object.values(jobsMap).forEach(({ task }) => task.stop());
+  jobsMap = {};
 
   logger.info('Starting cron scheduler...');
 
@@ -27,61 +36,78 @@ function startScheduler() {
       logger.error('[CRON] Notification processor failed', { error: err.message });
     }
   }, { scheduled: true });
-  JOB_REGISTRY.push({ name: 'notification-processor', schedule: '*/30 * * * * *', description: 'Process pending email notification jobs' });
+  jobsMap['notification-processor'] = { task: notifProcessor, paused: false };
 
   // ── Job 2: Daily Digest — every morning at 8 AM ───────────────────────────
   const digest = cron.schedule('0 8 * * *', async () => {
     logger.info('[CRON] Running daily digest job');
-    try {
-      await dailyDigestJob.run();
-    } catch (err) {
-      logger.error('[CRON] Daily digest failed', { error: err.message });
-    }
+    try { await dailyDigestJob.run(); }
+    catch (err) { logger.error('[CRON] Daily digest failed', { error: err.message }); }
   });
-  JOB_REGISTRY.push({ name: 'daily-digest', schedule: '0 8 * * *', description: 'Send daily task digest emails at 08:00 UTC' });
+  jobsMap['daily-digest'] = { task: digest, paused: false };
 
   // ── Job 3: Deadline Reminder — every 2 hours ──────────────────────────────
   const reminder = cron.schedule('0 */2 * * *', async () => {
     logger.info('[CRON] Running deadline reminder job');
-    try {
-      await deadlineReminderJob.run();
-    } catch (err) {
-      logger.error('[CRON] Deadline reminder failed', { error: err.message });
-    }
+    try { await deadlineReminderJob.run(); }
+    catch (err) { logger.error('[CRON] Deadline reminder failed', { error: err.message }); }
   });
-  JOB_REGISTRY.push({ name: 'deadline-reminder', schedule: '0 */2 * * *', description: 'Send deadline reminder emails every 2 hours' });
+  jobsMap['deadline-reminder'] = { task: reminder, paused: false };
 
   // ── Job 4: Task Cleanup — every day at midnight ───────────────────────────
   const cleanup = cron.schedule('0 0 * * *', async () => {
     logger.info('[CRON] Running task cleanup job');
-    try {
-      await taskCleanupJob.run();
-    } catch (err) {
-      logger.error('[CRON] Task cleanup failed', { error: err.message });
-    }
+    try { await taskCleanupJob.run(); }
+    catch (err) { logger.error('[CRON] Task cleanup failed', { error: err.message }); }
   });
-  JOB_REGISTRY.push({ name: 'task-cleanup', schedule: '0 0 * * *', description: 'Archive or clean up old completed tasks at midnight' });
-
-  scheduledJobs.push(notifProcessor, digest, reminder, cleanup);
+  jobsMap['task-cleanup'] = { task: cleanup, paused: false };
 
   logger.info('Cron jobs scheduled', {
-    jobs: JOB_REGISTRY.map((j) => `${j.name} (${j.schedule})`),
+    jobs: JOB_DEFS.map((j) => `${j.name} (${j.schedule})`),
   });
 }
 
 function stopScheduler() {
-  scheduledJobs.forEach((job) => job.stop());
-  scheduledJobs = [];
+  Object.values(jobsMap).forEach(({ task }) => task.stop());
+  jobsMap = {};
   logger.info('All cron jobs stopped.');
 }
 
-function getCronStatus() {
-  return JOB_REGISTRY.map((j) => ({
-    name:        j.name,
-    schedule:    j.schedule,
-    description: j.description,
-    running:     scheduledJobs.length > 0,
-  }));
+/**
+ * Pause a single job by name (keeps it registered, stops firing).
+ */
+function pauseJob(name) {
+  const entry = jobsMap[name];
+  if (!entry) throw new Error(`Job "${name}" not found`);
+  if (entry.paused) throw new Error(`Job "${name}" is already paused`);
+  entry.task.stop();
+  entry.paused = true;
+  logger.info(`Cron job paused: ${name}`);
 }
 
-module.exports = { startScheduler, stopScheduler, getCronStatus };
+/**
+ * Resume a previously paused job.
+ */
+function resumeJob(name) {
+  const entry = jobsMap[name];
+  if (!entry) throw new Error(`Job "${name}" not found`);
+  if (!entry.paused) throw new Error(`Job "${name}" is not paused`);
+  entry.task.start();
+  entry.paused = false;
+  logger.info(`Cron job resumed: ${name}`);
+}
+
+function getCronStatus() {
+  return JOB_DEFS.map((j) => {
+    const entry = jobsMap[j.name];
+    return {
+      name:        j.name,
+      schedule:    j.schedule,
+      description: j.description,
+      running:     !!entry && !entry.paused,
+      paused:      !!entry && entry.paused,
+    };
+  });
+}
+
+module.exports = { startScheduler, stopScheduler, pauseJob, resumeJob, getCronStatus };
